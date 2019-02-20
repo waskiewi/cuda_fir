@@ -5,11 +5,30 @@
 #include <cuda.h>
 #include "cuda_fir.h"
 #include "cuda_error.h"
-
+#include  <cmath>
 // block width must be wider than number of taps
 #define BLOCK_WIDTH     1024
 #define MAX_N_TAPS      100
 #define SHARED_WIDTH    (MAX_N_TAPS - 1 + BLOCK_WIDTH)
+
+
+__global__ void cudaMix(float2 * din, float offset_hz, float input_fs, float2 * dout, size_t length)
+{
+    int index = blockDim.x*blockIdx.x + threadIdx.x;
+    float2 inputShared;
+    float2 toneVal;
+    float phaseInc = 2*M_PI*offset_hz/input_fs;
+    toneVal.x = sinf(index*phaseInc);
+    toneVal.y = cosf(index*phaseInc);
+    inputShared = din[index];
+
+    //dout[index] = cmult(inputShared,toneVal);
+    dout[index].x = inputShared.x * toneVal.x -   inputShared.x *toneVal.y;
+    dout[index].y = inputShared.x * toneVal.y +   inputShared.y *toneVal.x;
+    //a + bi +* c + di = (ac)+(bd) - j ((bc)+ bd)
+
+
+}
 
 __global__ void cudaFir(
     float *taps, const size_t n_taps, 
@@ -130,4 +149,48 @@ void CudaFir::filter(sampleType* input, sampleType* output, size_t length)
     cudaFree(dtaps);
     cudaFree(dout);
     cudaFree(din);
+}
+
+void cmix(sampleType* input , sampleType* output, 
+        size_t length, float offset_hz, float input_fs)
+{
+    if (length == 0) 
+    {
+        // nothing to do here
+        return;
+    }
+
+    float2 *din, *dout;
+    float * dtaps;
+    size_t outputSize = length*sizeof(float2);
+    
+    cudaMalloc(&din, outputSize);
+    cudaMalloc(&dout, outputSize);
+    
+
+    
+    cudaMemcpy(din, input, outputSize, cudaMemcpyHostToDevice);    
+
+    const int threadsPerBlock = BLOCK_WIDTH;
+    const int numBlocks = (length + threadsPerBlock - 1) / threadsPerBlock;
+
+    cudaMix<<< numBlocks, threadsPerBlock >>>(din, offset_hz, input_fs, dout, length);
+
+    cudaDeviceSynchronize();
+
+    // check for errors running kernel
+    checkCUDAError("kernel invocation");
+ 
+    // device to host copy
+    cudaMemcpy(output, dout, outputSize, cudaMemcpyDeviceToHost );
+    
+ 
+    // Check for any CUDA errors
+    checkCUDAError("memcpy");
+    
+    
+    cudaFree(dout);
+    cudaFree(din);
+
+    
 }

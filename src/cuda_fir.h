@@ -5,6 +5,10 @@
 
 typedef std::complex<float> sampleType;
 
+
+void cmix(sampleType* input , sampleType* output, 
+		size_t length, float offset_hz, float input_fs);
+
 class CudaFir 
 {
 public:

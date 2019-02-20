@@ -70,6 +70,9 @@ int main(int argc, char const *argv[])
 		}
 
 		time = clock();
+		cmix(inBuffer,inBuffer,length,0.0 ,44000000.0 );
+
+		
 		cuda_fir.filter(inBuffer, outBuffer, length);
 		time = clock() - time;
 

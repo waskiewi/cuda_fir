@@ -39,6 +39,9 @@ void Fir::resizeState(size_t length)
 }
 
 
+
+
+
 void Fir::filter(sampleType* input, sampleType* output, size_t length)
 {
 	sampleType acc;
